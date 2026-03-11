@@ -1,0 +1,89 @@
+mod config;
+mod types;
+mod plugins;
+mod can_bus;
+
+use config::load_config;
+use can_bus::CanBus;
+use types::{SensorPayload, ControlCommand};
+use rs_ctrl_os::{init_logging, start_discovery, PubSubManager, TimeSynchronizer};
+use std::sync::Arc;
+use std::thread;
+use std::time::Duration;
+use log::info;
+use anyhow::Result;
+
+fn main() -> Result<()> {
+    init_logging();
+    info!("🚀 Gateway Node Starting...");
+
+    // 1. Load Config
+    let cfg_path = "configs/config.toml";
+    let initial_cfg = load_config(cfg_path)?;
+    
+    // 2. Init rs_ctrl_os
+    let static_cfg = initial_cfg.static_config.clone();
+    let time_sync = Arc::new(TimeSynchronizer::new());
+    let registry = start_discovery(
+        &static_cfg.my_id, &static_cfg.host, static_cfg.port, static_cfg.is_master,
+        Some(time_sync)
+    )?;
+    let bus = PubSubManager::new(&static_cfg, registry)?;
+
+    // 3. Init CAN Bus
+    let can_bus = Arc::new(CanBus::new(
+        &initial_cfg.dynamic.interfaces,
+        &initial_cfg.dynamic.devices
+    )?);
+
+    // 4. Start RX Thread (CAN -> ZMQ)
+    let (tx_chan, rx_chan) = std::sync::mpsc::channel::<SensorPayload>();
+    can_bus.start_rx(tx_chan);
+
+    // 5. Config Watcher (Hot Reload)
+    let can_bus_cfg = Arc::clone(&can_bus);
+    thread::spawn(move || {
+        loop {
+            // 模拟等待配置变化 (实际需调用 cfg_manager.wait_for_change())
+            thread::sleep(Duration::from_secs(2)); 
+            if let Ok(new_cfg) = load_config(cfg_path) {
+                can_bus_cfg.update_params(&new_cfg.dynamic.devices);
+            }
+        }
+    });
+
+    // 6. Main Loop (ZMQ pub + ZMQ -> CAN)
+    info!("Entering Control Loop");
+    loop {
+        // 发布传感器数据 (CAN -> ZMQ)
+        while let Ok(payload) = rx_chan.try_recv() {
+            let (topic, data) = match payload {
+                SensorPayload::Mit(m) => ("sensor_mit", serde_json::to_string(&m).unwrap()),
+                SensorPayload::Dji(d) => ("sensor_dji", serde_json::to_string(&d).unwrap()),
+                SensorPayload::Imu(i) => ("sensor_imu", serde_json::to_string(&i).unwrap()),
+            };
+            let _ = bus.publish_topic(topic, "data", &data);
+        }
+        // 尝试接收 DJI 指令
+        if let Ok(Some((topic, raw))) = bus.try_recv_raw("ctrl_dji") {
+            if topic == "cmd" {
+                if let Ok(cmd) = serde_json::from_slice::<ControlCommand>(&raw) {
+                    if initial_cfg.dynamic.control_enable {
+                        can_bus.send_command(cmd);
+                    }
+                }
+            }
+        }
+        // 尝试接收 MIT 指令
+        if let Ok(Some((topic, raw))) = bus.try_recv_raw("ctrl_mit") {
+            if topic == "cmd" {
+                if let Ok(cmd) = serde_json::from_slice::<ControlCommand>(&raw) {
+                    if initial_cfg.dynamic.control_enable {
+                        can_bus.send_command(cmd);
+                    }
+                }
+            }
+        }
+        thread::sleep(Duration::from_millis(1));
+    }
+}

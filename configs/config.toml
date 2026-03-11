@@ -1,0 +1,38 @@
+# ================= rs_ctrl_os 基础配置 =================
+[static_config]
+my_id = "gateway_node_01"
+host = "192.168.1.100"  # 请修改为本机 IP
+port = 5555
+is_master = false
+
+[static_config.publishers]
+sensor_mit = "self"
+sensor_dji = "self"
+sensor_imu = "self"
+
+[static_config.subscribers]
+ctrl_mit = "ctrl_node"
+ctrl_dji = "ctrl_node"
+ctrl_imu = "ctrl_node"
+
+# ================= 动态配置 (Dynamic) =================
+# 修改此部分并保存，节点将自动热更新参数 (KP, KD 等)
+[dynamic]
+
+interfaces = [
+    { name = "can0", bitrate = 5000000, fd_rate = 2000000 }, # DM-MIT 5M FD
+    { name = "can1", bitrate = 1000000, fd_rate = 0 },       # DJI 1M
+    { name = "can2", bitrate = 1000000, fd_rate = 0 }        # IMU 1M
+]
+
+devices = [
+
+    { name = "mit_joint_1", protocol = "dm_mit", interface = "can0", can_rx_id = 0x001, motor_id = 1, enabled = true, kp_default = 50.0, kd_default = 1.5, ff_default = 0.0 },
+    { name = "mit_joint_2", protocol = "dm_mit", interface = "can0", can_rx_id = 0x002, motor_id = 2, enabled = true, kp_default = 60.0, kd_default = 2.0, ff_default = 0.0 },
+    { name = "dji_joint_1", protocol = "dji_gm6020", interface = "can1", can_rx_id = 0x205, motor_id = 1, enabled = true },
+    { name = "dji_joint_2", protocol = "dji_gm6020", interface = "can1", can_rx_id = 0x206, motor_id = 2, enabled = true },
+    { name = "imu_main", protocol = "dm_imu_l1", interface = "can2", can_rx_id = 0x100, enabled = true },
+    
+]
+
+control_enable = true
