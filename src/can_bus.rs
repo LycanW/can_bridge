@@ -14,6 +14,7 @@ pub struct CanBus {
     plugins: Arc<RwLock<Vec<Box<dyn CanPlugin>>>>,
     sockets: Arc<Mutex<HashMap<String, CanFdSocket>>>,
     tx_senders: Arc<Mutex<HashMap<String, mpsc::Sender<(u16, [u8; 8])>>>>,
+    last_tx: Arc<Mutex<HashMap<String, (Vec<(u16, [u8; 8])>, std::time::Instant)>>>,
 }
 
 impl CanBus {
@@ -60,6 +61,7 @@ impl CanBus {
             plugins: Arc::new(RwLock::new(plugins)),
             sockets: Arc::new(Mutex::new(sockets)),
             tx_senders: Arc::new(Mutex::new(HashMap::new())),
+            last_tx: Arc::new(Mutex::new(HashMap::new())),
         })
     }
 
@@ -122,11 +124,35 @@ impl CanBus {
         }
 
         let senders = self.tx_senders.lock().unwrap();
+        let now = std::time::Instant::now();
         for (iface, cans) in buffers {
             if let Some(tx) = senders.get(&iface) {
-                for (id, data) in cans {
-                    let _ = tx.send((id, data));
+                let frames: Vec<(u16, [u8; 8])> = cans.into_iter().collect();
+                for &(id, ref data) in &frames {
+                    let _ = tx.send((id, data.clone()));
                 }
+                self.last_tx.lock().unwrap().insert(iface, (frames, now));
+            }
+        }
+    }
+
+    /// 按各接口配置的 control_freq_hz 周期重发上一帧，避免通讯超时
+    pub fn tick_control(&self, ifaces: &[crate::config::InterfaceCfg]) {
+        let now = std::time::Instant::now();
+        let senders = self.tx_senders.lock().unwrap();
+        let mut last = self.last_tx.lock().unwrap();
+        for cfg in ifaces {
+            if cfg.control_freq_hz == 0 { continue; }
+            let interval = std::time::Duration::from_secs_f64(1.0 / cfg.control_freq_hz as f64);
+            let frames = match last.get(&cfg.name) {
+                Some((f, t)) if now.duration_since(*t) >= interval && !f.is_empty() => f.clone(),
+                _ => continue,
+            };
+            if let Some(tx) = senders.get(&cfg.name) {
+                for (id, data) in &frames {
+                    let _ = tx.send((*id, *data));
+                }
+                last.insert(cfg.name.clone(), (frames, now));
             }
         }
     }

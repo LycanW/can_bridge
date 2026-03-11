@@ -27,6 +27,13 @@ pub struct InterfaceCfg {
     pub name: String,
     pub bitrate: u32,
     pub fd_rate: u32,
+    /// 控制帧发送频率 Hz，避免通讯丢失（DM-MIT 等需周期性指令）
+    #[serde(default = "default_control_freq")]
+    pub control_freq_hz: u32,
+}
+
+fn default_control_freq() -> u32 {
+    1000
 }
 
 #[derive(Debug, Clone, Deserialize)]

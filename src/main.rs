@@ -59,7 +59,13 @@ fn main() -> Result<()> {
     });
 
     // 6. Main Loop (ZMQ pub + ZMQ -> CAN)
-    info!("Entering Control Loop");
+    let loop_hz = initial_cfg.dynamic.interfaces.iter()
+        .map(|i| i.control_freq_hz)
+        .max()
+        .unwrap_or(1000)
+        .max(1);
+    let loop_interval = Duration::from_secs_f64(1.0 / loop_hz as f64);
+    info!("Entering Control Loop @ {}Hz", loop_hz);
     loop {
         // 发布传感器数据 (CAN -> ZMQ)
         while let Ok(payload) = rx_chan.try_recv() {
@@ -90,6 +96,7 @@ fn main() -> Result<()> {
                 }
             }
         }
-        thread::sleep(Duration::from_millis(1));
+        can_bus.tick_control(&initial_cfg.dynamic.interfaces);
+        thread::sleep(loop_interval);
     }
 }

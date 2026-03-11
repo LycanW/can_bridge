@@ -84,8 +84,8 @@ ctrl_dji = "ctrl_node"
 
 [dynamic]
 interfaces = [
-    { name = "can0", bitrate = 5000000, fd_rate = 2000000 },  # CAN FD
-    { name = "can1", bitrate = 1000000, fd_rate = 0 },
+    { name = "can0", bitrate = 5000000, fd_rate = 2000000, control_freq_hz = 1000 },
+    { name = "can1", bitrate = 1000000, fd_rate = 0, control_freq_hz = 500 },
 ]
 devices = [
     { name = "mit_joint_1", protocol = "dm_mit", interface = "can0",
@@ -119,8 +119,9 @@ sudo ./target/release/can_bridge
 | `name` | 接口名，如 `can0`、`vcan0` |
 | `bitrate` | 仲裁段波特率（bps） |
 | `fd_rate` | CAN FD 数据段波特率；`0` 表示经典 CAN |
+| `control_freq_hz` | 控制帧发送频率 Hz，按此周期重发上一帧避免通讯超时；`0` 表示不周期发送（默认 1000） |
 
-启动时会执行 `ip link set` 配置接口并 `ip link set up`，失败时仅记录日志，仍会尝试打开 socket。
+启动时会执行 `ip link set` 配置接口并 `ip link set up`，失败时仅记录日志，仍会尝试打开 socket。DM-MIT 等协议需周期性指令，建议 `control_freq_hz = 1000`；IMU 等只收不发可设为 `0`。
 
 ### 设备 (devices)
 
@@ -133,7 +134,6 @@ sudo ./target/release/can_bridge
 | `motor_id` | MIT 电机 ID 或 DJI 电机编号（IMU 可省略） |
 | `enabled` | 是否启用 |
 | `kp_default`, `kd_default`, `ff_default` | MIT 默认控制参数 |
-| `mit_auto_enable` | 启动后是否自动使能 MIT 电机（默认 true） |
 
 ---
 

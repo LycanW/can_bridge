@@ -20,9 +20,9 @@ ctrl_imu = "ctrl_node"
 [dynamic]
 
 interfaces = [
-    { name = "can0", bitrate = 5000000, fd_rate = 2000000 }, # DM-MIT 5M FD
-    { name = "can1", bitrate = 1000000, fd_rate = 0 },       # DJI 1M
-    { name = "can2", bitrate = 1000000, fd_rate = 0 }        # IMU 1M
+    { name = "can0", bitrate = 5000000, fd_rate = 2000000, control_freq_hz = 1000 },  # DM-MIT 5M FD，1kHz 控制
+    { name = "can1", bitrate = 1000000, fd_rate = 0, control_freq_hz = 500 },         # DJI 1M，500Hz
+    { name = "can2", bitrate = 1000000, fd_rate = 0, control_freq_hz = 0 }            # IMU 只收不发，0=不周期发送
 ]
 
 devices = [
