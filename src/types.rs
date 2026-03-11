@@ -8,6 +8,9 @@ pub struct MitMotorData {
     pub velocity: f32,
     pub torque: f32,
     pub temp: f32,
+    /// DM 反馈帧 ERR：0=失能, 1=使能, 8=超压, 9=欠压, 0xA=过流, 0xB=MOS过温, 0xC=线圈过温, 0xD=通讯丢失, 0xE=过载
+    #[serde(default)]
+    pub err_code: u8,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -51,8 +54,14 @@ pub enum ControlCommand {
         name: String, 
         pos: f32, 
         vel: f32, 
-        params: Option<MitControlParams> 
+        params: Option<MitControlParams>,  // 省略时使用 config 的 kp_default/kd_default/ff_default
     },
+    /// DM-MIT 使能：上电自检后需发送才能控制
+    MitEnable { name: String },
+    /// DM-MIT 失能
+    MitDisable { name: String },
+    /// DM-MIT 清除错误（如过热等故障后）
+    MitClearError { name: String },
     ImuConfig { rate_hz: u8 },
 }
 

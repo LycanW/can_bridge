@@ -86,6 +86,7 @@ devices = [
       can_rx_id = 0x205, motor_id = 1, enabled = true },
 ]
 control_enable = true
+mit_auto_enable = true   # 启动 0.5s 后自动使能 MIT 电机
 ```
 
 ### 3. 运行
@@ -123,6 +124,7 @@ sudo ./target/release/can_bridge
 | `motor_id` | MIT 电机 ID 或 DJI 电机编号（IMU 可省略） |
 | `enabled` | 是否启用 |
 | `kp_default`, `kd_default`, `ff_default` | MIT 默认控制参数 |
+| `mit_auto_enable` | 启动后是否自动使能 MIT 电机（默认 true） |
 
 ---
 
@@ -130,7 +132,8 @@ sudo ./target/release/can_bridge
 
 ### 传感器数据 (发布)
 
-- **sensor_mit**：`MitMotorData`（position, velocity, torque, temp）
+- **sensor_mit**：`MitMotorData`（position, velocity, torque, temp, err_code）
+  - `err_code`：DM 反馈 ERR，0=失能，1=使能，8=超压，9=欠压，0xA=过流，0xB=MOS过温，0xC=线圈过温，0xD=通讯丢失，0xE=过载
 - **sensor_dji**：`DjiMotorData`（angle_rad, current_a, torque_nm, temp_c）
 - **sensor_imu**：`ImuData`（ax, ay, az, wx, wy, wz）
 
@@ -146,7 +149,7 @@ sudo ./target/release/can_bridge
 { "DjiCurrent": { "name": "dji_joint_1", "target_a": 0.5 } }
 ```
 
-**MIT 阻抗控制：**
+**MIT 阻抗控制**（`params` 可选，省略时使用 config 的 `kp_default`/`kd_default`/`ff_default`）：
 
 ```json
 {
@@ -159,7 +162,17 @@ sudo ./target/release/can_bridge
 }
 ```
 
-`params` 可省略，将使用设备默认 KP/KD/FF。
+**DM-MIT 使能 / 失能 / 清除错误**（达妙 V4 协议，上电自检后需使能才能控制）：
+
+```json
+{ "MitEnable": { "name": "mit_joint_1" } }
+{ "MitDisable": { "name": "mit_joint_1" } }
+{ "MitClearError": { "name": "mit_joint_1" } }
+```
+
+**如何发送使能指令**：上位机需订阅 `ctrl_mit` 对应的 ZMQ 端点（由 `static_config.subscribers` 中的 `ctrl_mit` 配置），向子话题 `"cmd"` 发布上述 JSON。例如通过 rs_ctrl_os 的 `publish_topic("ctrl_mit", "cmd", &json_string)`，或直接连接 ZMQ 发布端发送 `["ctrl_mit", "cmd", json_string]` 形式的多帧消息。can_bridge 收到后会解析并转发到 CAN 总线。
+
+启动时若 `mit_auto_enable = true`（默认），can_bridge 将在约 0.5s 后自动向所有 MIT 设备发送使能；设为 `false` 可禁用自动使能，改由上位机通过上述方式手动发送。
 
 ---
 

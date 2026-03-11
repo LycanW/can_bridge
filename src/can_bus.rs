@@ -131,6 +131,15 @@ impl CanBus {
         }
     }
 
+    /// DM-MIT 电机上电自检后需发送使能才能控制，可于启动后延迟调用
+    pub fn enable_all_mit(&self, devs: &[DeviceCfg]) {
+        for d in devs.iter().filter(|x| x.enabled && x.protocol == "dm_mit") {
+            self.send_command(ControlCommand::MitEnable {
+                name: d.name.clone(),
+            });
+        }
+    }
+
     pub fn update_params(&self, devs: &[DeviceCfg]) {
         let mut pls = self.plugins.write().unwrap();
         for d in devs.iter().filter(|x| x.enabled) {

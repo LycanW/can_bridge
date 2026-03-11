@@ -40,6 +40,12 @@ fn main() -> Result<()> {
     let (tx_chan, rx_chan) = std::sync::mpsc::channel::<SensorPayload>();
     can_bus.start_rx(tx_chan);
 
+    // 4.1 DM-MIT 使能：上电自检后需发送使能命令才能控制（延迟 0.5s 待自检完成）
+    if initial_cfg.dynamic.mit_auto_enable {
+        thread::sleep(Duration::from_millis(500));
+        can_bus.enable_all_mit(&initial_cfg.dynamic.devices);
+    }
+
     // 5. Config Watcher (Hot Reload)
     let can_bus_cfg = Arc::clone(&can_bus);
     thread::spawn(move || {

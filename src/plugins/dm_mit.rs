@@ -3,6 +3,11 @@ use crate::types::{SensorPayload, ControlCommand, MitMotorData, TxFragment};
 use std::time::Instant;
 use log::{info, warn};
 
+// DM 达妙 V4 协议：使能/失能/清除错误（帧 ID 同控制帧，数据段固定）
+const CMD_ENABLE: [u8; 8] = [0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFC];
+const CMD_DISABLE: [u8; 8] = [0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFD];
+const CMD_CLEAR_ERROR: [u8; 8] = [0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFB];
+
 const P_MIN: f32 = -12.5;
 const P_MAX: f32 = 12.5;
 const V_MIN: f32 = -30.0;
@@ -25,6 +30,8 @@ pub struct MitPlugin {
     last_pos: f32,
     last_vel: f32,
     last_torque: f32,
+    last_err: u8,
+    last_temp: f32,
 }
 
 impl MitPlugin {
@@ -33,7 +40,8 @@ impl MitPlugin {
             warn!("⚠️ [{}] KP>0 but KD=0! Oscillation risk.", name);
         }
         info!("🦾 MIT '{}' init: ID={}, KP={:.1}, KD={:.1}", name, motor_id, kp, kd);
-        Self { name, interface: iface, motor_id, listen_id, kp, kd, ff, last_pos: 0.0, last_vel: 0.0, last_torque: 0.0 }
+        Self { name, interface: iface, motor_id, listen_id, kp, kd, ff,
+            last_pos: 0.0, last_vel: 0.0, last_torque: 0.0, last_err: 0, last_temp: 0.0 }
     }
 
     fn float_to_uint(val: f32, min: f32, max: f32, bits: u8) -> u16 {
@@ -62,17 +70,17 @@ impl MitPlugin {
         d
     }
 
-    // 注意：反馈格式需根据 DM 具体手册调整，此处假设为标准 16bit 线性映射
+    /// DM V4 反馈帧：D[0]=MST_ID, D[1]=ID|ERR<<4, D[2..3]=POS, D[4..6]=VEL+T, D[7]=T_MOS|T_Rotor
     fn unpack(&mut self, data: &[u8]) {
-        if data.len() < 6 { return; }
-        // 假设前 6 字节为 Pos, Vel, Torque (各 16bit signed)
-        let p_raw = ((data[0] as i16) << 8) | (data[1] as i16);
-        let v_raw = ((data[2] as i16) << 8) | (data[3] as i16);
-        let t_raw = ((data[4] as i16) << 8) | (data[5] as i16);
-        
-        self.last_pos = (p_raw as f32) * (P_MAX - P_MIN) / 65535.0 + P_MIN;
-        self.last_vel = (v_raw as f32) * (V_MAX - V_MIN) / 65535.0 + V_MIN;
-        self.last_torque = (t_raw as f32) * (T_MAX - T_MIN) / 65535.0 + T_MIN;
+        if data.len() < 8 { return; }
+        self.last_err = (data[1] >> 4) & 0xF;  // ERR: 0=失能, 1=使能, 8~E=故障
+        let p_raw = ((data[2] as u16) << 8) | (data[3] as u16);
+        let vel_12 = ((data[4] as u16) << 4) | ((data[5] >> 4) as u16);  // VEL 12bit
+        let t_12 = (((data[5] & 0xF) as u16) << 8) | (data[6] as u16);   // T 12bit
+        self.last_temp = data[7] as f32;  // T_MOS 或 T_Rotor（4+4bit 时取高 4bit）
+        self.last_pos = (p_raw as f32) / 65535.0 * (P_MAX - P_MIN) + P_MIN;
+        self.last_vel = (vel_12 as f32) / 4095.0 * (V_MAX - V_MIN) + V_MIN;
+        self.last_torque = (t_12 as f32) / 4095.0 * (T_MAX - T_MIN) + T_MIN;
     }
 }
 
@@ -89,33 +97,60 @@ impl CanPlugin for MitPlugin {
             position: self.last_pos,
             velocity: self.last_vel,
             torque: self.last_torque,
-            temp: 0.0,
+            temp: self.last_temp,
+            err_code: self.last_err,
         }))
     }
 
     fn handle_cmd(&mut self, cmd: &ControlCommand) -> Option<TxFragment> {
-        if let ControlCommand::MitControl { name, pos, vel, params } = cmd {
-            if *name != self.name { return None; }
-            
-            let (kp, kd, ff) = match params {
-                Some(p) => (p.kp, p.kd, p.ff),
-                None => (self.kp, self.kd, self.ff),
-            };
-
-            if kp > 0.0 && kd == 0.0 {
-                warn!("⚠️ [{}] Cmd Rejected: KP>0, KD=0", self.name);
-                return None;
+        let name_match = |n: &String| *n == self.name;
+        match cmd {
+            ControlCommand::MitEnable { name } if name_match(name) => {
+                info!("🟢 [{}] Enable", self.name);
+                Some(TxFragment {
+                    interface: self.interface.clone(),
+                    target_can_id: self.motor_id,
+                    byte_offset: 0, value: 0,
+                    direct_data: Some(CMD_ENABLE),
+                })
             }
-
-            let data = self.pack(*pos, *vel, kp, kd, ff);
-            Some(TxFragment {
-                interface: self.interface.clone(),
-                target_can_id: self.motor_id, // DM MIT: ID = motor_id
-                byte_offset: 0,
-                value: 0,
-                direct_data: Some(data),
-            })
-        } else { None }
+            ControlCommand::MitDisable { name } if name_match(name) => {
+                info!("🔴 [{}] Disable", self.name);
+                Some(TxFragment {
+                    interface: self.interface.clone(),
+                    target_can_id: self.motor_id,
+                    byte_offset: 0, value: 0,
+                    direct_data: Some(CMD_DISABLE),
+                })
+            }
+            ControlCommand::MitClearError { name } if name_match(name) => {
+                info!("🔄 [{}] Clear Error", self.name);
+                Some(TxFragment {
+                    interface: self.interface.clone(),
+                    target_can_id: self.motor_id,
+                    byte_offset: 0, value: 0,
+                    direct_data: Some(CMD_CLEAR_ERROR),
+                })
+            }
+            ControlCommand::MitControl { name, pos, vel, params } if name_match(name) => {
+                let (kp, kd, ff) = match params {
+                    Some(p) => (p.kp, p.kd, p.ff),
+                    None => (self.kp, self.kd, self.ff),
+                };
+                if kp > 0.0 && kd == 0.0 {
+                    warn!("⚠️ [{}] Cmd Rejected: KP>0, KD=0", self.name);
+                    return None;
+                }
+                let data = self.pack(*pos, *vel, kp, kd, ff);
+                Some(TxFragment {
+                    interface: self.interface.clone(),
+                    target_can_id: self.motor_id,
+                    byte_offset: 0, value: 0,
+                    direct_data: Some(data),
+                })
+            }
+            _ => None,
+        }
     }
 
     fn update_params(&mut self, kp: f32, kd: f32, ff: f32) {

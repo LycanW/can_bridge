@@ -13,6 +13,13 @@ pub struct DynamicConfig {
     pub interfaces: Vec<InterfaceCfg>,
     pub devices: Vec<DeviceCfg>,
     pub control_enable: bool,
+    /// DM-MIT 启动后是否自动使能（上电自检约 0.5s 后发送使能命令）
+    #[serde(default = "default_true")]
+    pub mit_auto_enable: bool,
+}
+
+fn default_true() -> bool {
+    true
 }
 
 #[derive(Debug, Clone, Deserialize)]
