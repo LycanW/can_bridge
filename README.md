@@ -1,8 +1,17 @@
 # can_bridge
 
-CAN 总线网关：将 Linux SocketCAN 与 ZeroMQ 打通，实现「CAN ↔ 分布式消息」的双向桥接。支持 DM-MIT、DJI GM6020、DM-IMU 等协议，结合 [rs_ctrl_os](https://crates.io/crates/rs_ctrl_os) 实现多节点发现与 pub/sub 通信。
+can_bridge 基于 [rs_ctrl_os](https://crates.io/crates/rs_ctrl_os) 构建，复用其分布式节点框架：
+
+- **节点发现**：`start_discovery` + `ServiceRegistry`（UDP 多播心跳）
+- **消息通信**：`PubSubManager`（ZeroMQ pub/sub）
+- **配置结构**：`static_config` 采用 `rs_ctrl_os::StaticBase`（my_id、host、port、publishers、subscribers 等）
+- **初始化**：`init_logging`、`TimeSynchronizer` 等
+
+配置中的 `[static_config]` 与 rs_ctrl_os 规范完全一致，需正确填写 `host`（本机 IP）、`subscribers`（从哪个节点订阅控制指令）等，才能与其他节点互通。
 
 ---
+
+CAN 总线网关：将 Linux SocketCAN 与 ZeroMQ 打通，实现「CAN ↔ 分布式消息」的双向桥接。支持 DM-MIT、DJI GM6020、DM-IMU 等协议。
 
 ## 功能概览
 
@@ -356,7 +365,7 @@ can_bridge/
 
 ## 依赖
 
-- **rs_ctrl_os**：节点发现、ZeroMQ pub/sub
+- **rs_ctrl_os**：节点发现、ZeroMQ pub/sub、StaticBase 配置（核心框架）
 - **socketcan**：Linux SocketCAN（含 CAN FD）
 - **serde** / **serde_json**：序列化
 - **anyhow** / **log**：错误与日志
