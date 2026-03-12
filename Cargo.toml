@@ -10,8 +10,8 @@ embedded-can = "0.4.1"
 env_logger = "0.11.9"
 kcp = "0.6.0"
 log = "0.4.29"
-# rs_ctrl_os = "0.3.0"
-rs_ctrl_os = { path = "../rs_ctrl_os" }
+rs_ctrl_os = "0.4.1"
+# rs_ctrl_os = { path = "../rs_ctrl_os" }
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.149"
 socket = "0.0.7"

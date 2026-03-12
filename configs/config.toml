@@ -18,6 +18,9 @@ ctrl_mit = "ctrl_node"
 ctrl_dji = "ctrl_node"
 ctrl_imu = "ctrl_node"
 
+# 可选：无多播时直连，此处留空（仅依赖 discovery）
+[static_config.static_nodes]
+
 # ================= 动态配置 (Dynamic) =================
 # 修改此部分并保存，节点将自动热更新参数 (KP, KD 等)
 [dynamic]

@@ -87,7 +87,7 @@ fn main() -> Result<()> {
             let _ = bus.publish_topic(topic, "data", &data);
         }
         let dynamic = manager.get_dynamic_clone();
-        // 尝试接收 DJI 指令
+        // try_recv_raw 内部自动 tick()，pending 订阅会在目标上线/static_nodes 可用时自动连接
         if let Ok(Some((topic, raw))) = bus.try_recv_raw("ctrl_dji") {
             if topic == "cmd" {
                 if let Ok(cmd) = serde_json::from_slice::<ControlCommand>(&raw) {
