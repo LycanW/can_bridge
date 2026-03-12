@@ -4,6 +4,8 @@ my_id = "gateway_node_01"
 host = "127.0.0.1"
 port = 5610
 is_master = true
+publish_hz = 1000
+subscribe_hz = 500
 
 [static_config.publishers]
 sensor_mit = "self"
@@ -18,12 +20,6 @@ ctrl_imu = "ctrl_node"
 # ================= 动态配置 (Dynamic) =================
 # 修改此部分并保存，节点将自动热更新参数 (KP, KD 等)
 [dynamic]
-
-# 传感器数据发布频率（Hz）
-# - >0: 固定频率发布（主循环 sleep 到该频率）
-# - =0: 动态频率（收到多少数据就发布多快；空闲时会短暂 sleep 防止 CPU 空转）
-publish_hz = 0
-
 interfaces = [
     # { name = "vcan0", bitrate = 5000000, fd_rate = 2000000, control_freq_hz = 1000 },  # DM-MIT 5M FD，1kHz 控制
     # { name = "vcan1", bitrate = 1000000, fd_rate = 0, control_freq_hz = 500 },         # DJI 1M，500Hz
