@@ -3,7 +3,7 @@
 my_id = "gateway_node_01"
 host = "127.0.0.1"
 port = 5610
-is_master = false
+is_master = true
 
 [static_config.publishers]
 sensor_mit = "self"
@@ -19,19 +19,24 @@ ctrl_imu = "ctrl_node"
 # 修改此部分并保存，节点将自动热更新参数 (KP, KD 等)
 [dynamic]
 
+# 传感器数据发布频率（Hz）
+# - >0: 固定频率发布（主循环 sleep 到该频率）
+# - =0: 动态频率（收到多少数据就发布多快；空闲时会短暂 sleep 防止 CPU 空转）
+publish_hz = 0
+
 interfaces = [
-    { name = "vcan0", bitrate = 5000000, fd_rate = 2000000, control_freq_hz = 1000 },  # DM-MIT 5M FD，1kHz 控制
+    # { name = "vcan0", bitrate = 5000000, fd_rate = 2000000, control_freq_hz = 1000 },  # DM-MIT 5M FD，1kHz 控制
     # { name = "vcan1", bitrate = 1000000, fd_rate = 0, control_freq_hz = 500 },         # DJI 1M，500Hz
-    # { name = "vcan2", bitrate = 1000000, fd_rate = 0, control_freq_hz = 0 }            # IMU 只收不发，0=不周期发送
+    { name = "can1", bitrate = 1000000, fd_rate = 0, control_freq_hz = 0 }            # IMU 只收不发，0=不周期发送
 ]
 
 devices = [
 
-    { name = "mit_joint_1", protocol = "dm_mit", interface = "vcan0", can_rx_id = 0x001, motor_id = 1, enabled = true, kp_default = 50.0, kd_default = 1.5, ff_default = 0.0 },
-    { name = "mit_joint_2", protocol = "dm_mit", interface = "vcan0", can_rx_id = 0x002, motor_id = 2, enabled = true, kp_default = 60.0, kd_default = 2.0, ff_default = 0.0 },
+    # { name = "mit_joint_1", protocol = "dm_mit", interface = "vcan0", can_rx_id = 0x001, motor_id = 1, enabled = true, kp_default = 50.0, kd_default = 1.5, ff_default = 0.0 },
+    # { name = "mit_joint_2", protocol = "dm_mit", interface = "vcan0", can_rx_id = 0x002, motor_id = 2, enabled = true, kp_default = 60.0, kd_default = 2.0, ff_default = 0.0 },
     # { name = "dji_joint_1", protocol = "dji_gm6020", interface = "vcan1", can_rx_id = 0x205, motor_id = 1, enabled = true },
     # { name = "dji_joint_2", protocol = "dji_gm6020", interface = "vcan1", can_rx_id = 0x206, motor_id = 2, enabled = true },
-    # { name = "imu_main", protocol = "dm_imu_l1", interface = "vcan2", can_rx_id = 0x100, enabled = true },
+    { name = "imu_main", protocol = "dm_imu_l1", interface = "can1", can_rx_id = 0x11, enabled = true },
     
 ]
 

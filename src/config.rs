@@ -13,6 +13,11 @@ pub struct DynamicConfig {
     pub interfaces: Vec<InterfaceCfg>,
     pub devices: Vec<DeviceCfg>,
     pub control_enable: bool,
+    /// 传感器数据发布频率（Hz）
+    /// - >0: 固定频率发布（主循环 sleep 到该频率）
+    /// - =0: 动态频率（收到多少数据就发布多快；空闲时会短暂 sleep 防止 CPU 空转）
+    #[serde(default = "default_publish_hz")]
+    pub publish_hz: u32,
     /// DM-MIT 启动后是否自动使能（上电自检约 0.5s 后发送使能命令）
     #[serde(default = "default_true")]
     pub mit_auto_enable: bool,
@@ -20,6 +25,10 @@ pub struct DynamicConfig {
 
 fn default_true() -> bool {
     true
+}
+
+fn default_publish_hz() -> u32 {
+    1000
 }
 
 #[derive(Debug, Clone, Deserialize)]

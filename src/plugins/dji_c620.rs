@@ -2,7 +2,7 @@ use super::CanPlugin;
 use crate::types::{SensorPayload, ControlCommand, DjiMotorData, TxFragment};
 use std::time::Instant;
 
-pub struct DjiGm6020Plugin {
+pub struct DjiC620Plugin {
     name: String, 
     interface: String,
     motor_id: u8,
@@ -10,15 +10,15 @@ pub struct DjiGm6020Plugin {
     tx_id: u16,
 }
 
-impl DjiGm6020Plugin {
+impl DjiC620Plugin {
     pub fn new(name: String, iface: String, mid: u8, lid: u16) -> Self {
-        let tid = if mid <= 4 { 0x1FF } else { 0x2FF };
+        let tid = if mid <= 4 { 0x200 } else { 0x1FF };
         Self { name, interface: iface, motor_id: mid, listen_id: lid, tx_id: tid }
     }
     fn offset(&self) -> usize { match self.motor_id { 1|5=>0, 2|6=>2, 3|7=>4, 4=>6, _=>0 } }
 }
 
-impl CanPlugin for DjiGm6020Plugin {
+impl CanPlugin for DjiC620Plugin {
     fn name(&self) -> &str { &self.name }
     fn interface(&self) -> &str { &self.interface }
     fn listen_can_id(&self) -> u16 { self.listen_id }
@@ -49,5 +49,5 @@ impl CanPlugin for DjiGm6020Plugin {
 }
 
 pub fn create(name: String, iface: String, mid: u16, lid: u16) -> Box<dyn CanPlugin> {
-    Box::new(DjiGm6020Plugin::new(name, iface, mid as u8, lid))
+    Box::new(DjiC620Plugin::new(name, iface, mid as u8, lid))
 }

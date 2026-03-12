@@ -4,6 +4,7 @@ use std::time::Instant;
 pub mod dm_mit;
 pub mod dji_gm6020;
 pub mod dm_imu_l1;
+pub mod dji_c620;
 
 pub trait CanPlugin: Send + Sync {
     fn name(&self) -> &str;

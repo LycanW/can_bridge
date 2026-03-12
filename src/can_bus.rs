@@ -7,8 +7,20 @@ use std::sync::mpsc;
 use std::sync::{Arc, RwLock, Mutex};
 use std::thread;
 use std::time::Instant;
-use log::info;
+use log::{debug, info, warn};
 use anyhow::Result;
+
+fn fmt_hex(bytes: &[u8]) -> String {
+    let mut s = String::with_capacity(bytes.len() * 3);
+    for (i, b) in bytes.iter().enumerate() {
+        if i > 0 {
+            s.push(' ');
+        }
+        use std::fmt::Write as _;
+        let _ = write!(&mut s, "{:02X}", b);
+    }
+    s
+}
 
 pub struct CanBus {
     plugins: Arc<RwLock<Vec<Box<dyn CanPlugin>>>>,
@@ -52,6 +64,9 @@ impl CanBus {
                 "dm_imu_l1" => crate::plugins::dm_imu_l1::create(
                     d.name.clone(), d.interface.clone(), d.can_rx_id
                 ),
+                "dji_c620" => crate::plugins::dji_c620::create(
+                    d.name.clone(), d.interface.clone(), d.motor_id, d.can_rx_id
+                ),
                 _ => continue,
             };
             plugins.push(p);
@@ -78,6 +93,8 @@ impl CanBus {
 
             thread::spawn(move || {
                 info!("📡 RX Thread: {}", iface_name);
+                let mut rx_frames: u64 = 0;
+                let mut last_stats = std::time::Instant::now();
                 loop {
                     // Drain pending TX before blocking read
                     while let Ok((id, data)) = rx.try_recv() {
@@ -91,6 +108,22 @@ impl CanBus {
                         let id = frame.raw_id() as u16;
                         let data = frame.data();
                         let now = Instant::now();
+                        rx_frames = rx_frames.saturating_add(1);
+
+                        debug!(
+                            "CAN RX {} id=0x{:03X} dlc={} data={}",
+                            iface_name,
+                            id,
+                            data.len(),
+                            fmt_hex(data)
+                        );
+
+                        let stats_now = std::time::Instant::now();
+                        if stats_now.duration_since(last_stats) >= std::time::Duration::from_secs(1) {
+                            info!("CAN RX stats {}: {} frames/s", iface_name, rx_frames);
+                            rx_frames = 0;
+                            last_stats = stats_now;
+                        }
                         
                         let mut pls = p_arc.write().unwrap();
                         for p in pls.iter_mut() {
@@ -100,6 +133,11 @@ impl CanBus {
                                 }
                             }
                         }
+                    } else {
+                        // 如果 read_frame() 返回错误/暂时不可读，这里不 panic；留给下一轮重试
+                        // 只在 debug 下提示一次性问题即可，避免刷屏
+                        // （socketcan 的 read_frame 在阻塞模式下通常不会走到这里）
+                        warn!("CAN read_frame failed on {}", iface_name);
                     }
                 }
             });
