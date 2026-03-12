@@ -6,6 +6,7 @@ port = 5610
 is_master = true
 publish_hz = 1000
 subscribe_hz = 500
+dynamic_load_enable = true
 
 [static_config.publishers]
 sensor_mit = "self"
