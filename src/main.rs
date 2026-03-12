@@ -69,12 +69,12 @@ fn main() -> Result<()> {
     loop {
         // 发布传感器数据 (CAN -> ZMQ)
         while let Ok(payload) = rx_chan.try_recv() {
-            let (topic, data) = match payload {
+            let (sub_topic, data) = match payload {
                 SensorPayload::Mit(m) => ("sensor_mit", serde_json::to_string(&m).unwrap()),
                 SensorPayload::Dji(d) => ("sensor_dji", serde_json::to_string(&d).unwrap()),
                 SensorPayload::Imu(i) => ("sensor_imu", serde_json::to_string(&i).unwrap()),
             };
-            let _ = bus.publish_topic(topic, "data", &data);
+            let _ = bus.publish_topic("sensor", sub_topic, &data);
         }
         // 尝试接收 DJI 指令
         if let Ok(Some((topic, raw))) = bus.try_recv_raw("ctrl_dji") {

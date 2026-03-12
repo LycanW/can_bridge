@@ -17,7 +17,7 @@ CAN 总线网关：将 Linux SocketCAN 与 ZeroMQ 打通，实现「CAN ↔ 分�
 
 | 方向 | 说明 |
 |------|------|
-| **CAN → ZMQ** | 传感器数据（MIT/DJI/IMU）解析后发布到 `sensor_mit` / `sensor_dji` / `sensor_imu` |
+| **CAN → ZMQ** | 传感器数据经 `sensor` 单路发布，sub_topic 为 `sensor_mit` / `sensor_dji` / `sensor_imu` |
 | **ZMQ → CAN** | 订阅 `ctrl_dji` / `ctrl_mit` 等控制话题，下发电流/位置指令到 CAN 设备 |
 
 **支持的协议：**
@@ -73,10 +73,9 @@ host = "192.168.1.100"   # 本机 IP
 port = 5555
 is_master = false
 
+# 单一 sensor publisher（参考 rs_ctrl_os multi_pub_node，避免同 port 多次 bind）
 [static_config.publishers]
-sensor_mit = "self"
-sensor_dji = "self"
-sensor_imu = "self"
+sensor = "self"
 
 [static_config.subscribers]
 ctrl_mit = "ctrl_node"
@@ -141,12 +140,12 @@ sudo ./target/release/can_bridge
 
 ### 传感器数据 (发布)
 
-- **sensor_mit**：`MitMotorData`（position, velocity, torque, temp, err_code）
-  - `err_code`：DM 反馈 ERR，0=失能，1=使能，8=超压，9=欠压，0xA=过流，0xB=MOS过温，0xC=线圈过温，0xD=通讯丢失，0xE=过载
-- **sensor_dji**：`DjiMotorData`（angle_rad, current_a, torque_nm, temp_c）
-- **sensor_imu**：`ImuData`（ax, ay, az, wx, wy, wz）
+- **sensor**：单一 publisher（避免同 port 多次 bind，参考 rs_ctrl_os [multi_pub_node](https://github.com/LycanW/rs_ctrl_os/blob/master/examples/multi_pub_node.rs)）
+  - sub_topic `sensor_mit`：`MitMotorData`（含 err_code：0=失能，1=使能，8~E=故障码）
+  - sub_topic `sensor_dji`：`DjiMotorData`
+  - sub_topic `sensor_imu`：`ImuData`
 
-均以 JSON 形式发布到 `publish_topic(topic_key, "data", &json_string)`。
+上位机订阅 can_bridge 的 `sensor` 后，`try_recv_raw` 返回 `(sub_topic, payload)`，按 sub_topic 区分 MIT/DJI/IMU 的 JSON。
 
 ### 控制命令 (订阅)
 

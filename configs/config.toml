@@ -1,14 +1,13 @@
 # ================= rs_ctrl_os 基础配置 =================
 [static_config]
 my_id = "gateway_node_01"
-host = "192.168.1.100"  # 请修改为本机 IP
-port = 5555
+host = "127.0.0.1"
+port = 5610
 is_master = false
 
+# 单一 publisher（避免同 port 多次 bind），用 sub_topic 区分 sensor_mit/sensor_dji/sensor_imu
 [static_config.publishers]
-sensor_mit = "self"
-sensor_dji = "self"
-sensor_imu = "self"
+sensor = "self"
 
 [static_config.subscribers]
 ctrl_mit = "ctrl_node"
@@ -20,18 +19,18 @@ ctrl_imu = "ctrl_node"
 [dynamic]
 
 interfaces = [
-    { name = "can0", bitrate = 5000000, fd_rate = 2000000, control_freq_hz = 1000 },  # DM-MIT 5M FD，1kHz 控制
-    { name = "can1", bitrate = 1000000, fd_rate = 0, control_freq_hz = 500 },         # DJI 1M，500Hz
-    { name = "can2", bitrate = 1000000, fd_rate = 0, control_freq_hz = 0 }            # IMU 只收不发，0=不周期发送
+    { name = "vcan0", bitrate = 5000000, fd_rate = 2000000, control_freq_hz = 1000 },  # DM-MIT 5M FD，1kHz 控制
+    # { name = "vcan1", bitrate = 1000000, fd_rate = 0, control_freq_hz = 500 },         # DJI 1M，500Hz
+    # { name = "vcan2", bitrate = 1000000, fd_rate = 0, control_freq_hz = 0 }            # IMU 只收不发，0=不周期发送
 ]
 
 devices = [
 
-    { name = "mit_joint_1", protocol = "dm_mit", interface = "can0", can_rx_id = 0x001, motor_id = 1, enabled = true, kp_default = 50.0, kd_default = 1.5, ff_default = 0.0 },
-    { name = "mit_joint_2", protocol = "dm_mit", interface = "can0", can_rx_id = 0x002, motor_id = 2, enabled = true, kp_default = 60.0, kd_default = 2.0, ff_default = 0.0 },
-    { name = "dji_joint_1", protocol = "dji_gm6020", interface = "can1", can_rx_id = 0x205, motor_id = 1, enabled = true },
-    { name = "dji_joint_2", protocol = "dji_gm6020", interface = "can1", can_rx_id = 0x206, motor_id = 2, enabled = true },
-    { name = "imu_main", protocol = "dm_imu_l1", interface = "can2", can_rx_id = 0x100, enabled = true },
+    { name = "mit_joint_1", protocol = "dm_mit", interface = "vcan0", can_rx_id = 0x001, motor_id = 1, enabled = true, kp_default = 50.0, kd_default = 1.5, ff_default = 0.0 },
+    { name = "mit_joint_2", protocol = "dm_mit", interface = "vcan0", can_rx_id = 0x002, motor_id = 2, enabled = true, kp_default = 60.0, kd_default = 2.0, ff_default = 0.0 },
+    # { name = "dji_joint_1", protocol = "dji_gm6020", interface = "vcan1", can_rx_id = 0x205, motor_id = 1, enabled = true },
+    # { name = "dji_joint_2", protocol = "dji_gm6020", interface = "vcan1", can_rx_id = 0x206, motor_id = 2, enabled = true },
+    # { name = "imu_main", protocol = "dm_imu_l1", interface = "vcan2", can_rx_id = 0x100, enabled = true },
     
 ]
 
