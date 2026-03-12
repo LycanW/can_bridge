@@ -1109,9 +1109,9 @@ checksum = "dc897dd8d9e8bd1ed8cdad82b5966c3e0ecae09fb1907d58efaa013543185d0a"
 
 [[package]]
 name = "rs_ctrl_os"
-version = "0.1.0"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1f04b6a2280f0f108177e2cb71b5d76169d56de1d18576163b7cc36bd5805095"
+checksum = "a9d48a97d482e1d426451214f6ef221b0f421f5deac28bf520f6a7a6ea4b1391"
 dependencies = [
  "bincode",
  "notify",

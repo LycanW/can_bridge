@@ -5,9 +5,10 @@ host = "127.0.0.1"
 port = 5610
 is_master = false
 
-# 单一 publisher（避免同 port 多次 bind），用 sub_topic 区分 sensor_mit/sensor_dji/sensor_imu
 [static_config.publishers]
-sensor = "self"
+sensor_mit = "self"
+sensor_dji = "self"
+sensor_imu = "self"
 
 [static_config.subscribers]
 ctrl_mit = "ctrl_node"
