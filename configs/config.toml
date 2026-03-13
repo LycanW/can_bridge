@@ -36,6 +36,8 @@ devices = [
     # { name = "mit_joint_2", protocol = "dm_mit", interface = "vcan0", can_rx_id = 0x002, motor_id = 2, enabled = true, kp_default = 60.0, kd_default = 2.0, ff_default = 0.0 },
     # { name = "dji_joint_1", protocol = "dji_gm6020", interface = "vcan1", can_rx_id = 0x205, motor_id = 1, enabled = true },
     # { name = "dji_joint_2", protocol = "dji_gm6020", interface = "vcan1", can_rx_id = 0x206, motor_id = 2, enabled = true },
+    # { name = "c620_joint_1", protocol = "dji_c620", interface = "vcan1", can_rx_id = 0x205, motor_id = 1, enabled = true, torque_constant = 0.741 },
+    # { name = "c620_joint_2", protocol = "dji_c620", interface = "vcan1", can_rx_id = 0x206, motor_id = 2, enabled = true, torque_constant = 0.741 },
     { name = "imu_main", protocol = "dm_imu_l1", interface = "can1", can_rx_id = 0x11, enabled = true },
     
 ]

@@ -24,6 +24,7 @@ CAN 总线网关：将 Linux SocketCAN 与 ZeroMQ 打通，实现「CAN ↔ 分�
 
 - `dm_mit`：DM-MIT 协议（MIT Cheetah 系列电机）
 - `dji_gm6020`：大疆 GM6020 云台电机（电流环）
+- `dji_c620`：大疆 C620 电调（电流环，需配置 `torque_constant`）
 - `dm_imu_l1`：达妙 DM-IMU-L1 六轴 IMU（按官方 CAN 映射解析加速度与角速度）
 
 ---
@@ -98,6 +99,8 @@ devices = [
       kp_default = 50.0, kd_default = 1.5, ff_default = 0.0 },
     { name = "dji_joint_1", protocol = "dji_gm6020", interface = "can1",
       can_rx_id = 0x205, motor_id = 1, enabled = true },
+    { name = "c620_joint_1", protocol = "dji_c620", interface = "can1",
+      can_rx_id = 0x205, motor_id = 1, enabled = true, torque_constant = 0.741 },
 ]
 control_enable = true
 mit_auto_enable = true   # 启动 0.5s 后自动使能 MIT 电机
@@ -128,6 +131,44 @@ sudo ./target/release/can_bridge
 
 启动时会执行 `ip link set` 配置接口并 `ip link set up`，失败时仅记录日志，仍会尝试打开 socket。DM-MIT 等协议需周期性指令，建议 `control_freq_hz = 1000`；IMU 等只收不发可设为 `0`。
 
+**动态接口数量**：接口数量无硬编码限制，在 `interfaces` 中配置多少个就会创建多少个。例如 can0～can7 共 8 路：
+
+```toml
+interfaces = [
+    { name = "can0", bitrate = 1000000, fd_rate = 0, control_freq_hz = 1000 },
+    { name = "can1", bitrate = 1000000, fd_rate = 0, control_freq_hz = 500 },
+    # ... can2-can7
+]
+```
+
+每个接口会单独起一个 RX 线程，并在系统上需有对应物理或虚拟 CAN 接口（如 `ip link` 可见）。
+
+### 控制帧频率与 tick_control
+
+`control_freq_hz` 和 `tick_control` 由 can_bridge 实现（非 rs_ctrl_os），用于保证电机收到足够的周期性控制帧，避免通讯超时。
+
+**逻辑简述：**
+
+1. 主循环以 `max(各接口 control_freq_hz)` 运行。
+2. 上位机通过 ZMQ 发新命令时，`send_command()` 发送并缓存该帧到 `last_tx`。
+3. 每次主循环调用 `tick_control()`：对每个接口检查 `now - last_tx >= 1/control_freq_hz`，满足则重发上一帧。
+
+**上位机发布频率 < control_freq_hz 时：**
+
+上位机 100Hz 发布、接口 `control_freq_hz = 1000` 时，`tick_control` 会按 1kHz 重复发送「上一帧」，电机仍收到 1kHz 的周期帧，不会超时。
+
+**各接口频率不同：**
+
+每个接口的 `control_freq_hz` 独立，例如：
+
+| 接口 | control_freq_hz | 重发间隔 |
+|------|-----------------|----------|
+| can0 (MIT) | 1000 | 1 ms |
+| can1 (DJI) | 500  | 2 ms |
+| can2       | 250  | 4 ms |
+
+主循环按 1000Hz 跑，`tick_control` 分别按各接口的 `interval` 检查并重发。
+
 ### 发布频率 (publish_hz)
 
 | 字段 | 说明 |
@@ -145,12 +186,15 @@ sudo ./target/release/can_bridge
 | 字段 | 说明 |
 |------|------|
 | `name` | 设备逻辑名，用于控制命令匹配 |
-| `protocol` | `dm_mit` / `dji_gm6020` / `dm_imu_l1` |
+| `protocol` | `dm_mit` / `dji_gm6020` / `dji_c620` / `dm_imu_l1` |
 | `interface` | 所属 CAN 接口 |
 | `can_rx_id` | 监听的 CAN ID（16 进制） |
 | `motor_id` | MIT 电机 ID 或 DJI 电机编号（IMU 可省略） |
 | `enabled` | 是否启用 |
-| `kp_default`, `kd_default`, `ff_default` | MIT 默认控制参数 |
+| `kp_default`, `kd_default`, `ff_default` | MIT 默认控制参数（未填时 0） |
+| `torque_constant` | C620 扭矩常数 (Nm/A)，**dji_c620 必填**，按电机单独配置 |
+
+C620 的 `torque_constant` 用于电流→扭矩换算（`torque_nm = current_a * torque_constant`），典型值约 0.741，随电机型号不同可调。
 
 ---
 
@@ -203,7 +247,7 @@ sudo ./target/release/can_bridge
 
 ## 热更新
 
-修改 `configs/config.toml` 中的 `[dynamic]` 并保存后，约 2 秒内会重载设备参数（如 MIT 的 KP/KD/FF），无需重启进程。
+修改 `configs/config.toml` 中的 `[dynamic]` 并保存后，约 2 秒内会重载设备参数（如 MIT 的 KP/KD/FF、C620 的 `torque_constant`），无需重启进程。
 
 ---
 
@@ -461,8 +505,9 @@ can_bridge/
 │   ├── can_bus.rs    # CAN 总线管理、接口配置、RX/TX
 │   └── plugins/
 │       ├── mod.rs    # CanPlugin trait
-│       ├── dm_mit.rs # DM-MIT 电机协议
+│       ├── dm_mit.rs   # DM-MIT 电机协议
 │       ├── dji_gm6020.rs
+│       ├── dji_c620.rs # DJI C620 电调
 │       └── dm_imu_l1.rs
 ├── configs/
 │   └── config.toml

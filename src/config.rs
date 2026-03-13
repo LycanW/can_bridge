@@ -45,4 +45,7 @@ pub struct DeviceCfg {
     pub kd_default: f32,
     #[serde(default)]
     pub ff_default: f32,
+    /// C620 扭矩常数 (Nm/A)，dji_c620 协议必填，按电机单独配置
+    #[serde(default)]
+    pub torque_constant: Option<f32>,
 }

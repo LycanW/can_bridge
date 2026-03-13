@@ -1,4 +1,5 @@
 use super::CanPlugin;
+use crate::config::DeviceCfg;
 use crate::types::{SensorPayload, ControlCommand, MitMotorData, TxFragment};
 use std::time::Instant;
 use log::{info, warn};
@@ -153,11 +154,11 @@ impl CanPlugin for MitPlugin {
         }
     }
 
-    fn update_params(&mut self, kp: f32, kd: f32, ff: f32) {
-        self.kp = kp;
-        self.kd = kd;
-        self.ff = ff;
-        info!("⚙️ [{}] Params Updated: KP={:.1}, KD={:.1}", self.name, kp, kd);
+    fn update_params(&mut self, dev: &DeviceCfg) {
+        self.kp = dev.kp_default;
+        self.kd = dev.kd_default;
+        self.ff = dev.ff_default;
+        info!("⚙️ [{}] Params Updated: KP={:.1}, KD={:.1}", self.name, self.kp, self.kd);
     }
 }
 

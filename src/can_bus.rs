@@ -65,8 +65,12 @@ impl CanBus {
                     d.name.clone(), d.interface.clone(), d.can_rx_id
                 ),
                 "dji_c620" => crate::plugins::dji_c620::create(
-                    d.name.clone(), d.interface.clone(), d.motor_id, d.can_rx_id
-                ),
+                    d.name.clone(),
+                    d.interface.clone(),
+                    d.motor_id,
+                    d.can_rx_id,
+                    d.torque_constant,
+                ).map_err(anyhow::Error::msg)?,
                 _ => continue,
             };
             plugins.push(p);
@@ -208,8 +212,8 @@ impl CanBus {
         let mut pls = self.plugins.write().unwrap();
         for d in devs.iter().filter(|x| x.enabled) {
             for p in pls.iter_mut() {
-                if p.name() == d.name && d.protocol == "dm_mit" {
-                    p.update_params(d.kp_default, d.kd_default, d.ff_default);
+                if p.name() == d.name && (d.protocol == "dm_mit" || d.protocol == "dji_c620") {
+                    p.update_params(d);
                 }
             }
         }
