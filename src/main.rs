@@ -88,7 +88,7 @@ fn main() -> Result<()> {
         }
         let dynamic = manager.get_dynamic_clone();
         // try_recv_raw 内部自动 tick()，pending 订阅会在目标上线/static_nodes 可用时自动连接
-        if let Ok(Some((topic, raw))) = bus.try_recv_raw("ctrl_dji") {
+        if let Ok(Some((_sender, topic, raw))) = bus.try_recv_raw("ctrl_dji") {
             if topic == "cmd" {
                 if let Ok(cmd) = serde_json::from_slice::<ControlCommand>(&raw) {
                     if dynamic.control_enable {
@@ -98,7 +98,7 @@ fn main() -> Result<()> {
             }
         }
         // 尝试接收 MIT 指令
-        if let Ok(Some((topic, raw))) = bus.try_recv_raw("ctrl_mit") {
+        if let Ok(Some((_sender, topic, raw))) = bus.try_recv_raw("ctrl_mit") {
             if topic == "cmd" {
                 if let Ok(cmd) = serde_json::from_slice::<ControlCommand>(&raw) {
                     if dynamic.control_enable {
