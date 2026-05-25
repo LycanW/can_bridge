@@ -32,7 +32,8 @@ pub struct MitPlugin {
     last_vel: f32,
     last_torque: f32,
     last_err: u8,
-    last_temp: f32,
+    last_temp_mos: f32,
+    last_temp_rotor: f32,
 }
 
 impl MitPlugin {
@@ -42,7 +43,7 @@ impl MitPlugin {
         }
         info!("🦾 MIT '{}' init: ID={}, KP={:.1}, KD={:.1}", name, motor_id, kp, kd);
         Self { name, interface: iface, motor_id, listen_id, kp, kd, ff,
-            last_pos: 0.0, last_vel: 0.0, last_torque: 0.0, last_err: 0, last_temp: 0.0 }
+            last_pos: 0.0, last_vel: 0.0, last_torque: 0.0, last_err: 0, last_temp_mos: 0.0, last_temp_rotor: 0.0 }
     }
 
     fn float_to_uint(val: f32, min: f32, max: f32, bits: u8) -> u16 {
@@ -71,14 +72,31 @@ impl MitPlugin {
         d
     }
 
-    /// DM V4 反馈帧：D[0]=MST_ID, D[1]=ID|ERR<<4, D[2..3]=POS, D[4..6]=VEL+T, D[7]=T_MOS|T_Rotor
+    /// DM V4 反馈帧：D[0]=MST_ID, D[1]=ID|ERR<<4, D[2..3]=POS, D[4..6]=VEL+T, D[7]=T_MOS, D[8]=T_Rotor (H3510)
+    /// 注：标准 DM-MIT 反馈帧为 8 字节，D[6]=T_MOS, D[7]=T_Rotor
     fn unpack(&mut self, data: &[u8]) {
         if data.len() < 8 { return; }
-        self.last_err = (data[1] >> 4) & 0xF;  // ERR: 0=失能, 1=使能, 8~E=故障
+        let err = (data[1] >> 4) & 0xF;
+        if err != self.last_err && err > 1 {
+            let err_str = match err {
+                0x8 => "Overvoltage",
+                0x9 => "Undervoltage", 
+                0xA => "Overcurrent",
+                0xB => "MOS Overtemp",
+                0xC => "Coil Overtemp",
+                0xD => "Comm Lost",
+                0xE => "Overload",
+                _ => "Unknown Error",
+            };
+            warn!("⚠️ [{}] Motor ERROR: {} (0x{:X})", self.name, err_str, err);
+        }
+        self.last_err = err;
         let p_raw = ((data[2] as u16) << 8) | (data[3] as u16);
         let vel_12 = ((data[4] as u16) << 4) | ((data[5] >> 4) as u16);  // VEL 12bit
         let t_12 = (((data[5] & 0xF) as u16) << 8) | (data[6] as u16);   // T 12bit
-        self.last_temp = data[7] as f32;  // T_MOS 或 T_Rotor（4+4bit 时取高 4bit）
+        // H3510: D[6]=T_MOS, D[7]=T_Rotor (说明书明确分开)
+        self.last_temp_mos = data[6] as f32;   // T_MOS 温度
+        self.last_temp_rotor = data[7] as f32; // T_Rotor 温度
         self.last_pos = (p_raw as f32) / 65535.0 * (P_MAX - P_MIN) + P_MIN;
         self.last_vel = (vel_12 as f32) / 4095.0 * (V_MAX - V_MIN) + V_MIN;
         self.last_torque = (t_12 as f32) / 4095.0 * (T_MAX - T_MIN) + T_MIN;
@@ -98,7 +116,8 @@ impl CanPlugin for MitPlugin {
             position: self.last_pos,
             velocity: self.last_vel,
             torque: self.last_torque,
-            temp: self.last_temp,
+            temp: self.last_temp_mos,         // T_MOS 为主要温度
+            temp_rotor: self.last_temp_rotor, // T_Rotor 为线圈温度
             err_code: self.last_err,
         }))
     }

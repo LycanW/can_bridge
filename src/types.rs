@@ -7,7 +7,8 @@ pub struct MitMotorData {
     pub position: f32,
     pub velocity: f32,
     pub torque: f32,
-    pub temp: f32,
+    pub temp: f32,         // T_MOS 驱动温度
+    pub temp_rotor: f32,   // T_Rotor 电机线圈温度 (H3510)
     /// DM 反馈帧 ERR：0=失能, 1=使能, 8=超压, 9=欠压, 0xA=过流, 0xB=MOS过温, 0xC=线圈过温, 0xD=通讯丢失, 0xE=过载
     #[serde(default)]
     pub err_code: u8,
